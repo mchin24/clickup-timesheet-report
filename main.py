@@ -18,7 +18,7 @@ def main():
     workspaces = response.json()
     if len(workspaces['teams']) > 1:
         for available_team in workspaces['teams']:
-            if available_team['name'] == "":
+            if available_team['name'] == "Sharpen":
                 team = available_team
     else:
         team = workspaces['teams'][0]
