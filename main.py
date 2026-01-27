@@ -74,7 +74,7 @@ def main():
             comments = response.json()
             tasks[task]['subtasks'][subtask_id]['comments'] = comments
 
-    open('task.json', 'w').write(json.dumps(tasks))
+    open('output.json', 'w').write(json.dumps(tasks))
     print('data saved')
 
 if __name__ == "__main__":

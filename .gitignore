@@ -208,3 +208,6 @@ __marimo__/
 
 # Intellij IDE files
 .idea
+
+# Ignore output file
+output.json
