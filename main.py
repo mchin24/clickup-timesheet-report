@@ -2,6 +2,8 @@ import requests
 import json
 import os
 import dotenv
+from google import genai
+from google.genai import types
 
 def main():
     dotenv.load_dotenv()
@@ -76,6 +78,31 @@ def main():
 
     open('output.json', 'w').write(json.dumps(tasks))
     print('data saved')
+
+    # Send the result to AI engine
+    ai_messages = "Please provide an executive summary for this employee's recent task history.\n\n" + json.dumps(tasks)
+    ai_client = genai.Client()
+    system_prompt = '''
+    You are a successful executive offering advice to a small startup. They are willing to provide you any information 
+    to enable you to offer relevant advice on achieving their goals of running a successful company. They are
+    inexperienced and will benefit from your foresight. They may need help understanding terminology or justifications
+    for your advice. You should be able to site evidence from real-world sources. Do not ever make up information to
+    provide an answer. Always draw from real-world knowledge available to you. If there is information that you lack,
+    be honest about the lack of information. Ask for more information if you need it.
+    '''
+
+    try:
+        response = ai_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents= ai_messages,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt
+            )
+        )
+        print(response.candidates[0].content.parts[0].text)
+    except Exception as e:
+        print("Error during content generation: " + e.message)
+
 
 if __name__ == "__main__":
     main()
