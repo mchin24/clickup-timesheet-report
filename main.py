@@ -4,6 +4,7 @@ import os
 import dotenv
 from google import genai
 from google.genai import types
+from datetime import datetime, timedelta
 
 def main():
     dotenv.load_dotenv()
@@ -25,8 +26,20 @@ def main():
     else:
         team = workspaces['teams'][0]
 
+    # Calculate previous week's Sunday to Saturday
+    today = datetime.now()
+    days_since_sunday = (today.weekday() + 1) % 7  # Sunday = 0
+    last_sunday = today - timedelta(days=days_since_sunday + 7)
+    previous_sunday = last_sunday.replace(hour=0, minute=0, second=0, microsecond=0)
+    previous_saturday = previous_sunday + timedelta(days=6, hours=23, minutes=59, seconds=59)
+
+    # Convert to milliseconds (ClickUp API format)
+    start_timestamp = int(previous_sunday.timestamp() * 1000)
+    end_timestamp = int(previous_saturday.timestamp() * 1000)
+    print(f"Report period: {previous_sunday} ({start_timestamp}) --> {previous_saturday} ({end_timestamp})")
+
     # Now we can get timesheet data
-    url = f"https://api.clickup.com/api/v2/team/{team['id']}/time_entries"
+    url = f"https://api.clickup.com/api/v2/team/{team['id']}/time_entries?start_date={start_timestamp}&end_date={end_timestamp}"
 
     headers = {
         "authorization": CLICKUP_API_KEY,
@@ -59,6 +72,7 @@ def main():
         if response.status_code != 200:
             raise Exception("Failed retrieving tasks with status code: " + str(response.status_code))
         comments = response.json()
+
         tasks[task]['comments'] = comments
 
         # Are there subtasks?
@@ -80,7 +94,28 @@ def main():
     print('data saved')
 
     # Send the result to AI engine
-    ai_messages = "Please provide an executive summary for this employee's recent task history.\n\n" + json.dumps(tasks)
+    ai_messages = f'''Please provide an executive summary for this employee's recent task history. 
+    The summary should be concise with no flowery language. Praise for noteworthy work is fine, but do not be overly
+    effusive. The purpose of this summary is to provide an update on project status, not to measure employee performance.
+    This is a high priority and high visibility project. It's important to provide accurate information and highlight
+    any issues.
+    
+    For each task, the full comment history is included so you have context of the project's overall progress. For this
+     summary, we're only concern with updates where the timestamp is between the timestamps {start_timestamp} and 
+    {end_timestamp}. The timestamps are in Unix time as milliseconds. They should evaluate to {previous_sunday} and
+    {previous_saturday}. This history is provided so you have context of the project's overall progress. Do not include 
+    updates on projects that haven't been updated during the time period mentioned. Note that we are in the Eastern 
+    timezone so please convert any dates that you mention appropriately.
+    
+    Each task summary should include the task name, a summarization of the progress, and next steps for the upcoming week.
+    
+    At the end of the report, include an advisory section. Use this section to provide feedback on the team's handling
+    of the tasks and overall project.
+    
+    Generate the report in markdown, using UTF-8.
+    ********
+    {json.dumps(tasks)}
+    '''
     ai_client = genai.Client()
     system_prompt = '''
     You are a successful executive offering advice to a small startup. They are willing to provide you any information 
@@ -93,13 +128,15 @@ def main():
 
     try:
         response = ai_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents= ai_messages,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt
             )
         )
         print(response.candidates[0].content.parts[0].text)
+        open('report.md', 'w').write(response.candidates[0].content.parts[0].text)
+        print(f"\n\n\n{response.usage_metadata}")
     except Exception as e:
         print("Error during content generation: " + e.message)
 
